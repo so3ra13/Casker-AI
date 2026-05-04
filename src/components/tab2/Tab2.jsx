@@ -150,20 +150,56 @@ export default function Tab2() {
     );
   };
 
-  const addMsg = (text, user) => setMsgs(m => [...m, { id: Date.now(), user, text }]);
+  const addMsg = (text, user, id, loading = false) => {
+    const msgId = id || Date.now();
+    setMsgs(m => [...m, { id: msgId, user, text, loading }]);
+  };
+
+  const [chatHistory2, setChatHistory2] = useState([]);
 
   const send = () => {
     const t = input.trim(); if (!t) return;
     addMsg(t, true); setInput('');
-    const pr = parseResult;
-    setTimeout(() => {
-      let resp = '';
-      if (!pr) { resp = '파일이 아직 분석되지 않았습니다. 먼저 AI 해석을 실행해 주세요.'; }
-      else if (t.includes('납') || t.includes('Pb')) { resp = `현재 설계의 납(Pb) 차폐층에 대해: Co-60 기준 HVL(반가층)은 약 1.25cm입니다. 납 1cm 감소 시 약 15~25% 투과율 증가를 예상할 수 있습니다.`; }
-      else if (t.includes('오류') || t.includes('error')) { resp = `감지된 오류: ${pr.errors.length}개. ${pr.errors.map(e => e.msg).join(' / ') || '없음'}`; }
-      else { resp = `현재 파일: Cell ${pr.cells}개, Surface ${pr.surfs}개, MODE ${pr.mode || 'N'}. 구체적인 설계 변경 시나리오를 질문해 주세요.`; }
-      addMsg(resp, false);
-    }, 700);
+    const loadingId = Date.now();
+    addMsg('🔬 설계 분석 중...', false, loadingId, true);
+
+    const ctx = parseResult || {};
+    fetch('http://localhost:8000/chat/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: t,
+        history: chatHistory2,
+        context: {
+          cellCount:  ctx.cells  || 0,
+          surfCount:  ctx.surfs  || 0,
+          materials:  [],
+          mode:       ctx.mode   || 'N',
+          nps:        ctx.nps    || '—',
+          errors:     ctx.errors?.map(e => e.msg) || [],
+          warns:      ctx.warns?.map(w => w.msg)  || [],
+          summary:    ctx.summary || '',
+        },
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        setMsgs(m => m.map(msg =>
+          msg.id === loadingId ? { ...msg, text: data.reply, loading: false } : msg
+        ));
+        setChatHistory2(h => [
+          ...h,
+          { role: 'user',  text: t },
+          { role: 'model', text: data.reply },
+        ]);
+      })
+      .catch(e => {
+        setMsgs(m => m.map(msg =>
+          msg.id === loadingId
+            ? { ...msg, text: `⚠ 서버 연결 실패. 백엔드가 실행 중인지 확인하세요.`, loading: false }
+            : msg
+        ));
+      });
   };
 
   const codeLines = uploadedCode ? uploadedCode.split('\n') : [];
@@ -318,7 +354,7 @@ export default function Tab2() {
 
           {/* Chat */}
           <ChatWrap>
-            <div style={{ padding: '6px 9px', background: theme.bg3, borderBottom: `1px solid ${theme.bd}`, fontSize: 9, fontWeight: 700, color: theme.tx2, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+            <div style={{ height: 36, padding: '0 9px', background: theme.bg3, borderBottom: `1px solid ${theme.bd}`, fontSize: 9, fontWeight: 700, color: theme.tx2, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
               <PulseDot />설계 조언 AI (파일 컨텍스트 인식)
             </div>
             <ChatMsgs>

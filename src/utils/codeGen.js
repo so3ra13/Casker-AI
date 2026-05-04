@@ -84,8 +84,36 @@ export function getImpLine(par, cells, impOverrides) {
 // ── Material Lines ─────────────────────────────────────────
 export function getMatLines(materials) {
   if (!materials.length) return [];
-  const mW = Math.max(...materials.map(m => `M${m.id}`.length)) + GAP;
-  return materials.map(m => `M${m.id}`.padEnd(mW) + (m.zaid || ''));
+
+  const lines = [];
+  const mW = Math.max(...materials.map(m => `M${m.id}`.length)) + 3;
+
+  materials.forEach(m => {
+    const mLabel = `M${m.id}`.padEnd(mW);
+
+    // zaid가 배열 구조 [ [zaid, dens, comment], ... ]
+    if (Array.isArray(m.zaid) && m.zaid.length) {
+      // 컬럼 폭 계산
+      const zW = Math.max(...m.zaid.map(z => String(z[0]).length)) + 3;
+      const dW = Math.max(...m.zaid.map(z => String(z[1]).length)) + 3;
+      const indent = ' '.repeat(mW);
+
+      m.zaid.forEach((entry, i) => {
+        const zaid    = String(entry[0]).padEnd(zW);
+        const density = String(entry[1]).padStart(dW);
+        const comment = entry[2] ? `    $ ${entry[2]}` : '';
+        const prefix  = i === 0 ? mLabel : indent;
+        lines.push(`${prefix}${zaid}${density}${comment}`);
+      });
+    } else if (typeof m.zaid === 'string' && m.zaid.trim()) {
+      // 구형 문자열 포맷 fallback
+      lines.push(mLabel + m.zaid);
+    } else {
+      lines.push(mLabel + '$ ZAID 미입력');
+    }
+  });
+
+  return lines;
 }
 
 // ── Tally Lines ────────────────────────────────────────────
