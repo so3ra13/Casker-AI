@@ -247,7 +247,8 @@ export const PulseDot = styled.div`
 
 // ── Col / Panel layout ────────────────────────────────────
 export const ColHeader = styled.div`
-  padding: 7px 11px;
+  height: 36px;
+  padding: 0 11px;
   background: ${theme.bg2};
   border-bottom: 1px solid ${theme.bd};
   display: flex;

@@ -1,7 +1,7 @@
 import CollapsibleCard from '@/components/CollapsibleCard';
 import { Row, Label, Btn, Select, Input, Divider, ModeChip, Info } from '@/theme';
 import { useMCNPStore } from '@/store/mcnpStore';
-import { MAT_DB } from '@/utils/constants';
+import { MAT_DB, MAT_CATEGORIES } from '@/utils/constants';
 import { theme } from '@/theme';
 import { useState } from 'react';
 import styled from 'styled-components';
@@ -48,15 +48,20 @@ export default function DataCard({ onDetail }) {
       <Row>
         <Select $w="auto" style={{ flex: 1 }} value={matKey} onChange={e => setMatKey(e.target.value)}>
           <option value="">-- 재질 선택 --</option>
-          <option value="uo2">UO₂ (-10.176 g/cc)</option>
-          <option value="zircaloy">Zircaloy-4 (-6.56 g/cc)</option>
-          <option value="water">물 H₂O (-1.0 g/cc)</option>
-          <option value="lead">납 Pb (-11.35 g/cc)</option>
-          <option value="concrete">콘크리트 (-2.3 g/cc)</option>
-          <option value="steel">강철 SS316 (-7.99 g/cc)</option>
-          <option value="hdpe">HDPE (-0.97 g/cc)</option>
-          <option value="boron">붕소강 (-7.8 g/cc)</option>
-          <option value="custom">+ 사용자정의...</option>
+          {MAT_CATEGORIES.map(cat => {
+            const items = Object.entries(MAT_DB).filter(([, v]) => v.category === cat && v.name !== '사용자정의');
+            if (!items.length) return null;
+            return (
+              <optgroup key={cat} label={`── ${cat} ──`}>
+                {items.map(([key, mat]) => (
+                  <option key={key} value={key}>{mat.name} ({mat.dens} g/cc)</option>
+                ))}
+              </optgroup>
+            );
+          })}
+          <optgroup label="── 기타 ──">
+            <option value="custom">+ 사용자정의</option>
+          </optgroup>
         </Select>
         <Btn $variant="green" onClick={handleAddMat}>추가</Btn>
       </Row>
