@@ -322,7 +322,7 @@ export default function ViewerChat({ onApply }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <ColHeader>
-        <ColTitle>3D 시각화 / 챗봇</ColTitle>
+        <ColTitle>시각화 / 챗봇</ColTitle>
         <div style={{ display: 'flex', gap: 4 }}>
           <Btn $variant="ghost" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => setWireframe(w => !w)}>
             {wireframe ? 'Solid' : 'Wire'}
@@ -337,7 +337,7 @@ export default function ViewerChat({ onApply }) {
       </ColHeader>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden', padding: 9 }}>
-        <div style={{ height: 220, flexShrink: 0, borderRadius: 5, overflow: 'hidden', border: `1px solid ${theme.bd}`, background: rendered ? 'radial-gradient(ellipse at 50% 40%, #0c1422, #090c12)' : theme.bg, position: 'relative' }}>
+        <div style={{ height: 200, flexShrink: 0, borderRadius: 5, overflow: 'hidden', border: `1px solid ${theme.bd}`, background: rendered ? 'radial-gradient(ellipse at 50% 40%, #0c1422, #090c12)' : theme.bg, position: 'relative' }}>
           {rendered ? (
             <>
               <Canvas camera={{ position: [camDist * 0.6, camDist * 0.5, camDist], fov: 45 }} style={{ background: 'transparent' }} gl={{ antialias: true }}>
