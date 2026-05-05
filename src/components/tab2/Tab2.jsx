@@ -121,6 +121,8 @@ export default function Tab2() {
   const [msgs, setMsgs] = useState([{ id: 0, user: false, text: '파일을 업로드하고 AI 해석을 실행하면 해당 설계에 대한 맞춤 조언을 드릴 수 있습니다.' }]);
   const [input, setInput] = useState('');
   const [rendered, setRendered] = useState(false);
+  const [wireframe2, setWireframe2] = useState(false);
+  const [autoRotate2, setAutoRotate2] = useState(true);
   const fileRef = useRef();
 
   const handleFile = (f) => {
@@ -320,17 +322,25 @@ export default function Tab2() {
       <Col>
         <ColHeader>
           <ColTitle>시각화 / 설계 조언</ColTitle>
-          <Btn $variant="ghost" style={{ fontSize: 9, padding: '2px 6px' }} disabled={!uploadedCode} onClick={() => setRendered(true)}>
-            시각화
-          </Btn>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <Btn $variant="ghost" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => setWireframe2(w => !w)}>
+              {wireframe2 ? 'Solid' : 'Wire'}
+            </Btn>
+            <Btn $variant="ghost" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => setAutoRotate2(a => !a)}>
+              {autoRotate2 ? '⏸ 회전' : '▶ 회전'}
+            </Btn>
+            <Btn $variant="primary" style={{ fontSize: 9, padding: '2px 6px' }} disabled={!uploadedCode} onClick={() => setRendered(true)}>
+              렌더링
+            </Btn>
+          </div>
         </ColHeader>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden', padding: 9 }}>
-          {/* 3D Viewer */}
-          <div style={{ height: 180, flexShrink: 0, borderRadius: 5, overflow: 'hidden', border: `1px solid ${theme.bd}`, background: 'radial-gradient(ellipse at 50% 40%, #0c1422, #090c12)' }}>
+          <div style={{ height: 200, flexShrink: 0, borderRadius: 5, overflow: 'hidden', border: `1px solid ${theme.bd}`, background: rendered ? 'radial-gradient(ellipse at 50% 40%, #0c1422, #090c12)' : theme.bg }}>
             {rendered ? (
-              <Canvas camera={{ position: [0, 3, 8], fov: 45 }} style={{ background: 'transparent' }}>
-                <ambientLight intensity={0.5} />
-                <directionalLight position={[5,10,5]} intensity={1} />
+              <Canvas camera={{ position: [0, 3, 8], fov: 45 }} style={{ background: 'transparent' }} gl={{ antialias: true }}>
+                <ambientLight intensity={0.7} />
+                <directionalLight position={[10, 20, 10]} intensity={1.4} />
+                <directionalLight position={[-8, 5, -5]} intensity={0.5} color="#a0c0ff" />
                 {[
                   { r: 2.0, color: theme.ac },
                   { r: 1.5, color: theme.tl },
@@ -338,16 +348,16 @@ export default function Tab2() {
                 ].map((l, i) => (
                   <mesh key={i}>
                     <cylinderGeometry args={[l.r, l.r, 5, 64, 1, true]} />
-                    <meshStandardMaterial color={l.color} transparent opacity={0.35} side={2} />
+                    <meshStandardMaterial color={l.color} transparent opacity={wireframe2 ? 0.08 : 0.35} side={2} wireframe={wireframe2} />
                   </mesh>
                 ))}
-                <OrbitControls />
-                <gridHelper args={[10, 10, theme.bd, theme.bd]} />
+                <OrbitControls autoRotate={autoRotate2} autoRotateSpeed={2} />
+                <gridHelper args={[10, 10, '#1a2040', '#1a2040']} />
               </Canvas>
             ) : (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 22, opacity: 0.4 }}>⬡</div>
-                <div style={{ fontSize: 9, color: theme.tx3 }}>파일 업로드 후 시각화</div>
+                <div style={{ fontSize: 9, color: theme.tx3 }}>파일 업로드 후 렌더링</div>
               </div>
             )}
           </div>

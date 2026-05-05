@@ -93,7 +93,7 @@ export default function CodePreview() {
   return (
     <ColWrap>
       <ColHeader>
-        <ColTitle>MCNP 코드 미리보기</ColTitle>
+        <ColTitle>코드 미리보기</ColTitle>
         <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
           <span style={{ fontSize: 9, color: theme.gn, display: 'flex', alignItems: 'center', gap: 3 }}>
             <PulseDot />실시간
@@ -106,11 +106,6 @@ export default function CodePreview() {
       <CodeArea>
         <RenderedCode lines={lines} />
       </CodeArea>
-
-      <div style={{ padding: '7px 10px', borderTop: `1px solid ${theme.bd}`, display: 'flex', gap: 5 }}>
-        <Btn $variant="primary" style={{ flex: 1 }} onClick={handleExport}>↓ .i 파일 내보내기</Btn>
-        <Btn $variant="ghost" onClick={handleCopy}>복사</Btn>
-      </div>
     </ColWrap>
   );
 }

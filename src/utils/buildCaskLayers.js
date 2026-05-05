@@ -2,27 +2,33 @@
  * buildCaskLayers.js
  * cells + surfaces + materials → Three.js 렌더링 레이어 배열
  *
- * 지원 도형:
- * 매크로바디: RCC, RPP, BOX, SPH, TRC, REC, ELL, WED, RHP/HEX
- * 일반 표면:  CX/CY/CZ, C/X/C/Y/C/Z, SO/S/SX/SY/SZ,
- *            PX/PY/PZ, KX/KY/KZ, TX/TY/TZ, GQ/SQ
+ * 핵심: 셀 표면식의 여러 서페이스를 조합해서 하나의 유한 형상으로 합성
+ *
+ * 조합 패턴:
+ *   CZ/CX/CY + PZ/PX/PY 두 개 → 유한 원기둥
+ *   SO/S/SX/SY/SZ            → 구
+ *   RCC, RPP, BOX, TRC 등    → 매크로바디 (단독)
+ *   PZ/PX/PY 만 있을 때      → 평면 (얇은 디스크)
  */
 
 const MAT_COLORS = [
   '#4f7fff','#1ec8e0','#f0a020','#28c99a','#f56a5a','#9b7ef8',
 ];
 
-// 파라미터 키 정규화 (₀→0, 특수문자→_)
+// 파라미터 키 정규화
 function normKey(p) {
-  return p.replace(/[₀₁₂₃¹²³]/g, c =>
-    ({'₀':'0','₁':'1','₂':'2','₃':'3','¹':'1','²':'2','³':'3'}[c]||c)
-  ).replace(/[^a-zA-Z0-9]/g, '_');
+  return p
+    .replace(/[₀₁₂₃¹²³]/g, c => ({'₀':'0','₁':'1','₂':'2','₃':'3','¹':'1','²':'2','³':'3'}[c]||c))
+    .replace(/[^a-zA-Z0-9]/g, '_');
 }
 
 function getParams(surf) {
   const raw = surf.params || {};
   const out = {};
-  Object.entries(raw).forEach(([k, v]) => { out[normKey(k)] = parseFloat(v) || 0; });
+  Object.entries(raw).forEach(([k, v]) => {
+    const val = parseFloat(v);
+    out[normKey(k)] = isNaN(val) ? 0 : val;
+  });
   return out;
 }
 
@@ -35,193 +41,177 @@ function findSurf(surfaces, id) {
   return surfaces.find(s => s.id === id);
 }
 
-// ── 도형별 치수 추출 ────────────────────────────────────────
-
-function dimRCC(p) {
-  // RCC: x0 y0 z0  vx vy vz  r
-  const vx = p.vx || 0, vy = p.vy || 0, vz = p.vz || 0;
-  const h  = Math.sqrt(vx*vx + vy*vy + vz*vz) || 10;
-  const r  = Math.abs(p.r || 1);
-  return { shape:'cylinder', r, h,
-    axis: Math.abs(vz) >= Math.abs(vx) && Math.abs(vz) >= Math.abs(vy) ? 'z'
-        : Math.abs(vy) >= Math.abs(vx) ? 'y' : 'x' };
-}
-
-function dimRPP(p) {
-  // RPP: xmin xmax ymin ymax zmin zmax
-  const dx = Math.abs((p.xmax||1) - (p.xmin||0));
-  const dy = Math.abs((p.ymax||1) - (p.ymin||0));
-  const dz = Math.abs((p.zmax||1) - (p.zmin||0));
-  return { shape:'box', w: dx, d: dy, h: dz };
-}
-
-function dimBOX(p) {
-  // BOX: ax ay az  bx by bz  cx cy cz  (base + 3 edge vectors)
-  const bx = p.bx||p.vx||1, by = p.by||p.vy||0, bz = p.bz||p.vz||0;
-  const cx = p.cx||0,       cy = p.cy||1,        cz = p.cz||0;
-  const dx = p.dx||0,       dy = p.dy||0,        dz = p.dz||1;
-  const w = Math.sqrt(bx*bx+by*by+bz*bz)||1;
-  const d = Math.sqrt(cx*cx+cy*cy+cz*cz)||1;
-  const h = Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
-  return { shape:'box', w, d, h };
-}
-
-function dimSPH(p) {
-  // SPH: vx vy vz r  (center + radius)
-  const r = Math.abs(p.r||1);
-  return { shape:'sphere', r, h: r*2 };
-}
-
-function dimSO(p) {
-  // SO: r  (sphere at origin)
-  const r = Math.abs(p.r || p.d || 1);
-  return { shape:'sphere', r, h: r*2 };
-}
-
-function dimS_axis(p, axis) {
-  // SX/SY/SZ: pos r
-  const r = Math.abs(p.r || 1);
-  return { shape:'sphere', r, h: r*2 };
-}
-
-function dimTRC(p) {
-  // TRC: x0 y0 z0  vx vy vz  r1 r2
-  const vx = p.vx||0, vy = p.vy||0, vz = p.vz||0;
-  const h  = Math.sqrt(vx*vx+vy*vy+vz*vz)||5;
-  const r1 = Math.abs(p.r1||p.r||2);
-  const r2 = Math.abs(p.r2||0);
-  return { shape:'cone', r: Math.max(r1,r2), rTop: Math.min(r1,r2), h };
-}
-
-function dimREC(p) {
-  // REC: x0 y0 z0  vx vy vz  ax ay az  bx by bz
-  const vx=p.vx||0, vy=p.vy||0, vz=p.vz||0;
-  const ax=p.ax||1, ay=p.ay||0, az=p.az||0;
-  const bx=p.bx||0, by=p.by||1, bz=p.bz||0;
-  const h  = Math.sqrt(vx*vx+vy*vy+vz*vz)||5;
-  const ra = Math.sqrt(ax*ax+ay*ay+az*az)||1;
-  const rb = Math.sqrt(bx*bx+by*by+bz*bz)||1;
-  return { shape:'cylinder', r: (ra+rb)/2, h };
-}
-
-function dimELL(p) {
-  // ELL: vx vy vz  ax ay az  r  (focus1, focus2, major axis length)
-  const r = Math.abs(p.r||p.r0||1);
-  return { shape:'sphere', r, h: r*2 };
-}
-
-function dimWED(p) {
-  // WED: 삼각기둥 → box로 근사
-  const h = Math.abs(p.vz||p.vy||p.vx||5);
-  const r = Math.abs(p.r||1);
-  return { shape:'box', w: r*2, d: r, h };
-}
-
-function dimRHP(p) {
-  // RHP/HEX: 육각기둥
-  const vx=p.vx||0, vy=p.vy||0, vz=p.vz||0;
-  const h = Math.sqrt(vx*vx+vy*vy+vz*vz)||5;
-  const r = Math.abs(p.r1||p.r||1);
-  return { shape:'cylinder', r, h };  // cylinder로 근사
-}
-
-function dimCylAxis(p, axis) {
-  // CX/CY/CZ: r  (infinite cylinder, finite로 근사)
-  const r = Math.abs(p.r || p.d || 1);
-  return { shape:'cylinder', r, h: r*10, axis };
-}
-
-function dimCylParallel(p, axis) {
-  // C/X C/Y C/Z: y0 z0 r (or x0 z0 r or x0 y0 r)
-  const r = Math.abs(p.r || 1);
-  return { shape:'cylinder', r, h: r*10, axis };
-}
-
-function dimKone(p, axis) {
-  // KX/KY/KZ: x0 t2  (무한 원뿔 → cone으로 근사)
-  const t = Math.sqrt(Math.abs(p.t2 || 1));
-  const h = Math.abs(p.x0 || p.y0 || p.z0 || 5) * 2;
-  return { shape:'cone', r: h * t / 2, rTop: 0, h, axis };
-}
-
-function dimTorus(p, axis) {
-  // TX/TY/TZ: x0 y0 z0  A B C
-  const A = Math.abs(p.A || 3);  // major radius
-  const B = Math.abs(p.B || 1);  // minor radius (ellipse semi-axis 1)
-  const C = Math.abs(p.C || 1);  // minor radius (ellipse semi-axis 2)
-  return { shape:'torus', r: A, tube: (B+C)/2, h: (A+(B+C)/2)*2, axis };
-}
-
-function dimGQ(p) {
-  // GQ: 일반 2차 곡면 → sphere로 근사
-  const r = 1;
-  return { shape:'sphere', r, h: r*2 };
-}
-
-function dimPlane(p, axis) {
-  // PX/PY/PZ: 무한 평면 → 얇은 box로 표현
-  return { shape:'box', w: 10, d: 10, h: 0.05 };
-}
-
-// ── 타입 → 치수 디스패처 ───────────────────────────────────
-function getDims(surf, params) {
+// ── 단일 서페이스 치수 ───────────────────────────────────────
+function getSingleDims(surf, params) {
   const t = surf.type.toUpperCase();
-  switch(t) {
-    // 매크로바디
-    case 'RCC':  return dimRCC(params);
-    case 'RPP':  return dimRPP(params);
-    case 'BOX':  return dimBOX(params);
-    case 'SPH':  return dimSPH(params);
-    case 'TRC':  return dimTRC(params);
-    case 'REC':  return dimREC(params);
-    case 'ELL':  return dimELL(params);
-    case 'WED':  return dimWED(params);
+  switch (t) {
+    // ── 매크로바디 ──
+    case 'RCC': {
+      const vx = params.vx||0, vy = params.vy||0, vz = params.vz||0;
+      const h  = Math.sqrt(vx*vx + vy*vy + vz*vz) || 10;
+      const r  = Math.abs(params.r || 1);
+      const axis = Math.abs(vz) >= Math.abs(vx) && Math.abs(vz) >= Math.abs(vy) ? 'z'
+                 : Math.abs(vy) >= Math.abs(vx) ? 'y' : 'x';
+      return { shape:'cylinder', r, h, axis };
+    }
+    case 'RPP': {
+      const dx = Math.abs((params.xmax||1) - (params.xmin||0));
+      const dy = Math.abs((params.ymax||1) - (params.ymin||0));
+      const dz = Math.abs((params.zmax||1) - (params.zmin||0));
+      return { shape:'box', r: Math.max(dx,dy)/2, w:dx, d:dy, h:dz };
+    }
+    case 'BOX': {
+      const bx=params.bx||1, by=params.by||0, bz=params.bz||0;
+      const cx=params.cx||0, cy=params.cy||1, cz=params.cz||0;
+      const dx=params.dx||0, dy=params.dy||0, dz=params.dz||1;
+      const w = Math.sqrt(bx*bx+by*by+bz*bz)||1;
+      const d = Math.sqrt(cx*cx+cy*cy+cz*cz)||1;
+      const h = Math.sqrt(dx*dx+dy*dy+dz*dz)||1;
+      return { shape:'box', r:Math.max(w,d)/2, w, d, h };
+    }
+    case 'SPH':
+    case 'S': {
+      const r = Math.abs(params.r || 1);
+      return { shape:'sphere', r, h:r*2 };
+    }
+    case 'SO': {
+      const r = Math.abs(params.r || params.d || 1);
+      return { shape:'sphere', r, h:r*2 };
+    }
+    case 'SX': case 'SY': case 'SZ': {
+      const r = Math.abs(params.r || 1);
+      return { shape:'sphere', r, h:r*2 };
+    }
+    case 'TRC': {
+      const vx=params.vx||0, vy=params.vy||0, vz=params.vz||0;
+      const h  = Math.sqrt(vx*vx+vy*vy+vz*vz)||5;
+      const r1 = Math.abs(params.r1||params.r||2);
+      const r2 = Math.abs(params.r2||0);
+      return { shape:'cone', r:Math.max(r1,r2), rTop:Math.min(r1,r2), h };
+    }
+    case 'REC': {
+      const vx=params.vx||0, vy=params.vy||0, vz=params.vz||0;
+      const ax=params.ax||1, ay=params.ay||0, az=params.az||0;
+      const bx=params.bx||0, by=params.by||1, bz=params.bz||0;
+      const h  = Math.sqrt(vx*vx+vy*vy+vz*vz)||5;
+      const ra = Math.sqrt(ax*ax+ay*ay+az*az)||1;
+      const rb = Math.sqrt(bx*bx+by*by+bz*bz)||1;
+      return { shape:'cylinder', r:(ra+rb)/2, h, axis:'z' };
+    }
+    case 'ELL':
+    case 'WED':
     case 'RHP':
-    case 'HEX':  return dimRHP(params);
-    // 구
-    case 'SO':   return dimSO(params);
-    case 'S':    return dimSPH(params);
-    case 'SX':   return dimS_axis(params, 'x');
-    case 'SY':   return dimS_axis(params, 'y');
-    case 'SZ':   return dimS_axis(params, 'z');
-    // 원기둥 (축 중심)
-    case 'CX':   return dimCylAxis(params, 'x');
-    case 'CY':   return dimCylAxis(params, 'y');
-    case 'CZ':   return dimCylAxis(params, 'z');
-    // 원기둥 (축 평행)
-    case 'C/X':  return dimCylParallel(params, 'x');
-    case 'C/Y':  return dimCylParallel(params, 'y');
-    case 'C/Z':  return dimCylParallel(params, 'z');
-    // 원뿔
-    case 'KX':   return dimKone(params, 'x');
-    case 'KY':   return dimKone(params, 'y');
-    case 'KZ':   return dimKone(params, 'z');
-    case 'K/X':  return dimKone(params, 'x');
-    case 'K/Y':  return dimKone(params, 'y');
-    case 'K/Z':  return dimKone(params, 'z');
-    // 토러스
-    case 'TX':   return dimTorus(params, 'x');
-    case 'TY':   return dimTorus(params, 'y');
-    case 'TZ':   return dimTorus(params, 'z');
-    // 평면
-    case 'PX':   return dimPlane(params, 'x');
-    case 'PY':   return dimPlane(params, 'y');
-    case 'PZ':   return dimPlane(params, 'z');
-    case 'P':    return dimPlane(params, 'z');
-    // 2차 곡면
-    case 'GQ':
-    case 'SQ':   return dimGQ(params);
-    default:     return null;
+    case 'HEX': {
+      const r = Math.abs(params.r || params.r1 || 1);
+      const h = Math.abs(params.vz || params.vy || params.vx || r*4);
+      return { shape:'cylinder', r, h, axis:'z' };
+    }
+    // ── 일반 표면 (단독일 때만 fallback) ──
+    case 'CX': return { shape:'cylinder', r:Math.abs(params.r||1), h:(params.r||1)*10, axis:'x' };
+    case 'CY': return { shape:'cylinder', r:Math.abs(params.r||1), h:(params.r||1)*10, axis:'y' };
+    case 'CZ': return { shape:'cylinder', r:Math.abs(params.r||1), h:(params.r||1)*10, axis:'z' };
+    case 'TX': return { shape:'torus', r:Math.abs(params.A||3), tube:Math.abs(params.B||1), h:0, axis:'x' };
+    case 'TY': return { shape:'torus', r:Math.abs(params.A||3), tube:Math.abs(params.B||1), h:0, axis:'y' };
+    case 'TZ': return { shape:'torus', r:Math.abs(params.A||3), tube:Math.abs(params.B||1), h:0, axis:'z' };
+    case 'KX': case 'K/X': { const h=10; return { shape:'cone', r:h*Math.sqrt(Math.abs(params.t2||0.5)), rTop:0, h, axis:'x' }; }
+    case 'KY': case 'K/Y': { const h=10; return { shape:'cone', r:h*Math.sqrt(Math.abs(params.t2||0.5)), rTop:0, h, axis:'y' }; }
+    case 'KZ': case 'K/Z': { const h=10; return { shape:'cone', r:h*Math.sqrt(Math.abs(params.t2||0.5)), rTop:0, h, axis:'z' }; }
+    case 'PX': return { shape:'plane', r:5, h:0.05, w:10, d:10, axis:'x' };
+    case 'PY': return { shape:'plane', r:5, h:0.05, w:10, d:10, axis:'y' };
+    case 'PZ': return { shape:'plane', r:5, h:0.05, w:10, d:10, axis:'z' };
+    case 'P':  return { shape:'plane', r:5, h:0.05, w:10, d:10, axis:'z' };
+    case 'GQ': case 'SQ': return { shape:'sphere', r:1, h:2 };
+    default:   return null;
   }
+}
+
+// ── 핵심: 여러 서페이스 조합 → 유한 형상 합성 ────────────────
+function combineSurfaces(surfs) {
+  const types = surfs.map(s => s.type.toUpperCase());
+
+  // ── 매크로바디는 단독 처리 ──
+  const MACROBODIES = ['RCC','RPP','BOX','SPH','TRC','REC','ELL','WED','RHP','HEX'];
+  const macro = surfs.find(s => MACROBODIES.includes(s.type.toUpperCase()));
+  if (macro) return getSingleDims(macro, getParams(macro));
+
+  // ── 구 (SO/S/SX/SY/SZ) ──
+  const sphere = surfs.find(s => ['SO','S','SX','SY','SZ'].includes(s.type.toUpperCase()));
+  if (sphere) return getSingleDims(sphere, getParams(sphere));
+
+  // ── CZ + PZ 조합 → 유한 원기둥 (z축) ──
+  const cyl = surfs.find(s => s.type.toUpperCase() === 'CZ');
+  const pzs = surfs.filter(s => s.type.toUpperCase() === 'PZ');
+  if (cyl && pzs.length >= 2) {
+    const r = Math.abs(getParams(cyl).r || 1);
+    const zVals = pzs.map(p => getParams(p).d || 0).sort((a, b) => a - b);
+    const h = Math.abs(zVals[zVals.length - 1] - zVals[0]) || r * 4;
+    return { shape:'cylinder', r, h, axis:'z' };
+  }
+  if (cyl && pzs.length === 1) {
+    const r = Math.abs(getParams(cyl).r || 1);
+    const h = r * 6;
+    return { shape:'cylinder', r, h, axis:'z' };
+  }
+
+  // ── CX + PX 조합 → 유한 원기둥 (x축) ──
+  const cylX = surfs.find(s => s.type.toUpperCase() === 'CX');
+  const pxs  = surfs.filter(s => s.type.toUpperCase() === 'PX');
+  if (cylX && pxs.length >= 2) {
+    const r = Math.abs(getParams(cylX).r || 1);
+    const xVals = pxs.map(p => getParams(p).d || 0).sort((a, b) => a - b);
+    const h = Math.abs(xVals[xVals.length - 1] - xVals[0]) || r * 4;
+    return { shape:'cylinder', r, h, axis:'x' };
+  }
+
+  // ── CY + PY 조합 → 유한 원기둥 (y축) ──
+  const cylY = surfs.find(s => s.type.toUpperCase() === 'CY');
+  const pys  = surfs.filter(s => s.type.toUpperCase() === 'PY');
+  if (cylY && pys.length >= 2) {
+    const r = Math.abs(getParams(cylY).r || 1);
+    const yVals = pys.map(p => getParams(p).d || 0).sort((a, b) => a - b);
+    const h = Math.abs(yVals[yVals.length - 1] - yVals[0]) || r * 4;
+    return { shape:'cylinder', r, h, axis:'y' };
+  }
+
+  // ── C/Z (축 평행 원기둥) + PZ 조합 ──
+  const cylPZ = surfs.find(s => ['C/Z','CZ'].includes(s.type.toUpperCase()));
+  if (cylPZ) {
+    const p = getParams(cylPZ);
+    const r = Math.abs(p.r || 1);
+    if (pzs.length >= 2) {
+      const zVals = pzs.map(pl => getParams(pl).d || 0).sort((a,b) => a-b);
+      return { shape:'cylinder', r, h: Math.abs(zVals[zVals.length-1] - zVals[0]) || r*4, axis:'z' };
+    }
+    return { shape:'cylinder', r, h: r * 6, axis:'z' };
+  }
+
+  // ── PZ만 여러 개 → 렌더링 제외 (평면은 셀 형상이 아님) ──
+  const onlyPlanes = surfs.every(s => ['PX','PY','PZ','P'].includes(s.type.toUpperCase()));
+  if (onlyPlanes) return null;  // ← 평면만 있으면 건너뜀
+
+  // ── 단독 원기둥 (유한 못 구성) ──
+  const anyCyl = surfs.find(s => ['CX','CY','CZ','C/X','C/Y','C/Z'].includes(s.type.toUpperCase()));
+  if (anyCyl) {
+    const r = Math.abs(getParams(anyCyl).r || 1);
+    const axis = anyCyl.type.toUpperCase().includes('X') ? 'x'
+               : anyCyl.type.toUpperCase().includes('Y') ? 'y' : 'z';
+    return { shape:'cylinder', r, h: r * 6, axis };
+  }
+
+  // ── 토러스 ──
+  const torus = surfs.find(s => ['TX','TY','TZ'].includes(s.type.toUpperCase()));
+  if (torus) return getSingleDims(torus, getParams(torus));
+
+  // ── 원뿔 ──
+  const cone = surfs.find(s => ['KX','KY','KZ','K/X','K/Y','K/Z'].includes(s.type.toUpperCase()));
+  if (cone) return getSingleDims(cone, getParams(cone));
+
+  return null;
 }
 
 // ── 스케일 자동 조정 ─────────────────────────────────────────
 function autoScale(dims) {
-  const maxDim = Math.max(
-    dims.r || 0, dims.h || 0,
-    dims.w || 0, dims.d || 0,
-    dims.tube || 0,
-  );
+  const maxDim = Math.max(dims.r||0, dims.h||0, dims.w||0, dims.d||0);
   if (maxDim > 1000) return 0.005;
   if (maxDim > 500)  return 0.01;
   if (maxDim > 200)  return 0.02;
@@ -236,7 +226,7 @@ export function buildCaskLayers(cells, surfaces, materials) {
   if (!cells.length) return [];
 
   const layers = [];
-  const normalCells = cells.filter(c => c.type !== 'boundary');
+  const normalCells = cells.filter(c => c.type !== 'boundary' && c.type !== 'lat');
 
   normalCells.forEach((cell, ci) => {
     const matId = parseInt(cell.mat);
@@ -244,49 +234,40 @@ export function buildCaskLayers(cells, surfaces, materials) {
     const color = MAT_COLORS[ci % MAT_COLORS.length];
     const label = mat?.name || `셀 ${cell.id}`;
 
-    const surfNums = extractSurfNums(cell.surf);
-
-    // 표면 번호 없으면 기본 원통
+    const surfNums = (cell.surf?.match(/\d+/g) || []).map(Number);
     if (!surfNums.length) {
-      layers.push({ type:'RCC', shape:'cylinder', r: Math.max(0.5, 2.5 - ci*0.5), h: 5, color, label });
+      layers.push({ shape:'cylinder', r: Math.max(0.5, 2.5 - ci*0.5), h:5, color, label });
       return;
     }
 
-    // 표면 번호들 중 첫 번째로 유효한 것 사용
-    let pushed = false;
-    for (const snum of surfNums) {
-      const surf = findSurf(surfaces, snum);
-      if (!surf) continue;
-
-      const params = getParams(surf);
-      const dims   = getDims(surf, params);
-      if (!dims) continue;
-
-      const scale  = autoScale(dims);
-
-      layers.push({
-        type:    surf.type,
-        shape:   dims.shape,
-        r:       (dims.r    || 1) * scale,
-        h:       (dims.h    || 5) * scale,
-        w:       (dims.w    || dims.r || 1) * scale,
-        d:       (dims.d    || dims.r || 1) * scale,
-        rTop:    (dims.rTop || 0) * scale,
-        tube:    (dims.tube || 0.3) * scale,
-        axis:    dims.axis || 'z',
-        color,
-        label,
-        surfType: surf.type,
-        rawR:    dims.r,
-        rawH:    dims.h,
-      });
-      pushed = true;
-      break;
+    // 셀에 연결된 모든 서페이스 수집
+    const surfs = surfNums.map(n => findSurf(surfaces, n)).filter(Boolean);
+    if (!surfs.length) {
+      layers.push({ shape:'cylinder', r: Math.max(0.5, 2.5 - ci*0.5), h:5, color, label });
+      return;
     }
 
-    if (!pushed) {
-      layers.push({ type:'RCC', shape:'cylinder', r: Math.max(0.5, 2.5 - ci*0.5), h: 5, color, label });
-    }
+    // 조합 → 유한 형상
+    const dims = combineSurfaces(surfs);
+    if (!dims) return;  // 평면만 있는 경우 스킵
+
+    const scale = autoScale(dims);
+
+    layers.push({
+      shape:   dims.shape,
+      r:       (dims.r    || 1)   * scale,
+      h:       (dims.h    || 5)   * scale,
+      w:       (dims.w    || dims.r || 1) * scale,
+      d:       (dims.d    || dims.r || 1) * scale,
+      rTop:    (dims.rTop || 0)   * scale,
+      tube:    (dims.tube || (dims.r||1) * 0.25) * scale,
+      axis:    dims.axis || 'z',
+      color,
+      label,
+      surfType: surfs[0]?.type,
+      rawR:    dims.r,
+      rawH:    dims.h,
+    });
   });
 
   return layers;

@@ -43,10 +43,10 @@ export default function DataCard({ onDetail }) {
         ))}
       </div>
 
-      {/* MATERIAL */}
+{/* MATERIAL */}
       <Divider><span>MATERIAL (M)</span></Divider>
-      <Row>
-        <Select $w="auto" style={{ flex: 1 }} value={matKey} onChange={e => setMatKey(e.target.value)}>
+      <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+        <Select $w="auto" value={matKey} onChange={e => setMatKey(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
           <option value="">-- 재질 선택 --</option>
           {MAT_CATEGORIES.map(cat => {
             const items = Object.entries(MAT_DB).filter(([, v]) => v.category === cat && v.name !== '사용자정의');
@@ -63,8 +63,8 @@ export default function DataCard({ onDetail }) {
             <option value="custom">+ 사용자정의</option>
           </optgroup>
         </Select>
-        <Btn $variant="green" onClick={handleAddMat}>추가</Btn>
-      </Row>
+        <Btn $variant="green" onClick={handleAddMat} style={{ flexShrink: 0, padding: '3px 10px', fontSize: 10 }}>추가</Btn>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {materials.map(m => (
           <MatItem key={m.id}>
