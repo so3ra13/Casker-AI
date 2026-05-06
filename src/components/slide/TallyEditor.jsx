@@ -4,6 +4,8 @@ import { theme, Row, Label, Input, Select, Btn, Textarea, Divider, Info, RowItem
 import { useMCNPStore } from '@/store/mcnpStore';
 import { ICRP21, SI_PRESETS, TALLY_TYPES, PARTICLE_TYPES } from '@/utils/constants';
 import CollapsibleCard from '@/components/CollapsibleCard';
+import { SLIDE_TOOLTIPS } from '@/utils/tooltips';
+import Tooltip from '@/components/Tooltip';
 
 const OptBtn = styled.button`
   font-size: 8px;
@@ -48,9 +50,11 @@ function TallyRow({ t }) {
         <OptBtn $on={t.eOpen} onClick={() => up('eOpen', !t.eOpen)}>
           {t.eOpen ? '- E빈 ✕' : '+ E빈'}
         </OptBtn>
+        <Tooltip title={SLIDE_TOOLTIPS.E_BIN.title} desc={SLIDE_TOOLTIPS.E_BIN.desc} code={SLIDE_TOOLTIPS.E_BIN.code} />
         <OptBtn $on={t.deOpen} onClick={() => up('deOpen', !t.deOpen)}>
           {t.deOpen ? '- DE/DF ✕' : '+ DE/DF'}
         </OptBtn>
+        <Tooltip title={SLIDE_TOOLTIPS.DE_DF.title} desc={SLIDE_TOOLTIPS.DE_DF.desc} code={SLIDE_TOOLTIPS.DE_DF.code} />
       </Row>
       {t.eOpen && (
         <div>
@@ -99,7 +103,7 @@ export default function TallyEditor() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
 
       {/* IMP */}
-      <CollapsibleCard badge="IMP" title="Importance Card">
+      <CollapsibleCard badge="IMP" title="Importance Card" tooltip={SLIDE_TOOLTIPS.IMP}>
         <Info>셀 수 = 값 개수 필수 / 그래이브야드=0</Info>
         {['N', 'P', 'E'].map(par => (
           <RowItem key={par}>
@@ -119,7 +123,7 @@ export default function TallyEditor() {
       </CollapsibleCard>
 
       {/* SI/SP */}
-      <CollapsibleCard badge="SDEF" title="선원 분포 (SI / SP)">
+      <CollapsibleCard badge="SDEF" title="선원 분포 (SI / SP)" tooltip={SLIDE_TOOLTIPS.SI}>
         <Info>ERG=D1 로 설정 시 SI/SP 카드로 에너지 스펙트럼 정의</Info>
         <Row>
           <Label>프리셋</Label>
@@ -131,19 +135,25 @@ export default function TallyEditor() {
           </Select>
         </Row>
         <div>
-          <Label>SI1 (에너지 구간, MeV)</Label>
-          <Textarea rows={2} style={{ marginTop: 2 }} value={si1} onChange={e => setSi1(e.target.value)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+            <Label>SI1 (에너지 구간, MeV)</Label>
+            <Tooltip title={SLIDE_TOOLTIPS.SI.title} desc={SLIDE_TOOLTIPS.SI.desc} code={SLIDE_TOOLTIPS.SI.code} />
+          </div>
+          <Textarea rows={2} value={si1} onChange={e => setSi1(e.target.value)}
             placeholder="예) H  1.0  1.17  1.33  1.5" />
         </div>
         <div>
-          <Label>SP1 (확률)</Label>
-          <Textarea rows={2} style={{ marginTop: 2 }} value={sp1} onChange={e => setSp1(e.target.value)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+            <Label>SP1 (확률)</Label>
+            <Tooltip title={SLIDE_TOOLTIPS.SP.title} desc={SLIDE_TOOLTIPS.SP.desc} code={SLIDE_TOOLTIPS.SP.code} />
+          </div>
+          <Textarea rows={2} value={sp1} onChange={e => setSp1(e.target.value)}
             placeholder="예) 0  0.5  0.5  0" />
         </div>
       </CollapsibleCard>
 
       {/* Tally */}
-      <CollapsibleCard badge="TALLY" title="Tally Card (F)">
+      <CollapsibleCard badge="TALLY" title="Tally Card (F)" tooltip={SLIDE_TOOLTIPS.TALLY_F}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {tallies.map(t => <TallyRow key={t.id} t={t} />)}
         </div>
@@ -151,7 +161,7 @@ export default function TallyEditor() {
       </CollapsibleCard>
 
       {/* FMESH */}
-      <CollapsibleCard badge="FMESH" title="메시 Tally (FMESH)">
+      <CollapsibleCard badge="FMESH" title="메시 Tally (FMESH)" tooltip={SLIDE_TOOLTIPS.FMESH}>
         <Info>Cask 외부 선량 분포 시각화 — 기하학과 독립적인 3D 격자</Info>
         <Row>
           <Label>활성화</Label>
@@ -196,7 +206,7 @@ export default function TallyEditor() {
       </CollapsibleCard>
 
       {/* KSRC */}
-      <CollapsibleCard badge="DATA" title="초기 중성자 위치 (KSRC)">
+      <CollapsibleCard badge="DATA" title="초기 중성자 위치 (KSRC)" tooltip={SLIDE_TOOLTIPS.KSRC}>
         {ksrcPoints.map((p, i) => (
           <Row key={i}>
             {['x','y','z'].map(ax => (

@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react';
 import styled from 'styled-components';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
 import { theme, ColHeader, ColTitle, Btn, PulseDot, Info } from '@/theme';
 import { useMCNPStore } from '@/store/mcnpStore';
 import { parseMCNP } from '@/utils/parser';
+import { buildCaskLayers } from '@/utils/buildCaskLayers';
 import CollapsibleCard from '@/components/CollapsibleCard';
 
 const Grid = styled.div`
@@ -115,6 +117,67 @@ const ChatInputRow = styled.div`padding:6px 9px;border-top:1px solid ${theme.bd}
 const ChatInput = styled.textarea`flex:1;background:${theme.bg3};border:1px solid ${theme.bd2};border-radius:4px;color:${theme.tx};font-size:10px;padding:5px 8px;outline:none;resize:none;font-family:${theme.sf};&:focus{border-color:${theme.ac};}`;
 const SendBtn = styled.button`width:28px;height:28px;background:${theme.ac};border:none;border-radius:4px;cursor:pointer;color:#fff;font-size:12px;&:hover{background:${theme.ac2};}`;
 
+// ── Tab2 전용 3D 씬 ──────────────────────────────────────
+function CaskLayer2({ layer, index, total, wireframe }) {
+  const op = wireframe ? 0.08 : Math.max(0.22, 0.82 - index * (0.5 / Math.max(total - 1, 1)));
+  const rot = layer.axis === 'x' ? [0, 0, Math.PI/2] : layer.axis === 'y' ? [Math.PI/2, 0, 0] : [0, 0, 0];
+  return (
+    <group rotation={rot}>
+      <mesh>
+        <cylinderGeometry args={[layer.r, layer.r, layer.h, 48, 1, true]} />
+        <meshStandardMaterial color={layer.color} transparent opacity={op} side={THREE.DoubleSide} roughness={0.5} wireframe={wireframe} />
+      </mesh>
+      {!wireframe && <mesh><cylinderGeometry args={[layer.r, layer.r, layer.h, 24, 1, true]} /><meshBasicMaterial color={layer.color} transparent opacity={0.15} side={THREE.DoubleSide} wireframe /></mesh>}
+      <mesh position={[0, layer.h/2, 0]}><circleGeometry args={[layer.r, 48]} /><meshStandardMaterial color={layer.color} transparent opacity={op*0.6} side={THREE.DoubleSide} wireframe={wireframe} /></mesh>
+      <mesh position={[0, -layer.h/2, 0]}><circleGeometry args={[layer.r, 48]} /><meshStandardMaterial color={layer.color} transparent opacity={op*0.6} side={THREE.DoubleSide} wireframe={wireframe} /></mesh>
+    </group>
+  );
+}
+function SphLayer2({ layer, index, total, wireframe }) {
+  const op = wireframe ? 0.08 : Math.max(0.2, 0.72 - index * 0.15);
+  return <mesh><sphereGeometry args={[layer.r, 32, 32]} /><meshStandardMaterial color={layer.color} transparent opacity={op} side={THREE.DoubleSide} wireframe={wireframe} /></mesh>;
+}
+function BoxLayer2({ layer, index, total, wireframe }) {
+  const op = wireframe ? 0.08 : Math.max(0.22, 0.75 - index * 0.12);
+  return <mesh><boxGeometry args={[layer.w||layer.r*2, layer.h, layer.d||layer.r*2]} /><meshStandardMaterial color={layer.color} transparent opacity={op} side={THREE.DoubleSide} wireframe={wireframe} /></mesh>;
+}
+function ConeLayer2({ layer, index, total, wireframe }) {
+  const op = wireframe ? 0.08 : Math.max(0.22, 0.75 - index * 0.12);
+  return <mesh><cylinderGeometry args={[layer.rTop||0, layer.r, layer.h, 48, 1, true]} /><meshStandardMaterial color={layer.color} transparent opacity={op} side={THREE.DoubleSide} wireframe={wireframe} /></mesh>;
+}
+function ShapeLayer2({ layer, index, total, wireframe }) {
+  switch (layer.shape) {
+    case 'sphere': return <SphLayer2 layer={layer} index={index} total={total} wireframe={wireframe} />;
+    case 'box':    return <BoxLayer2 layer={layer} index={index} total={total} wireframe={wireframe} />;
+    case 'cone':   return <ConeLayer2 layer={layer} index={index} total={total} wireframe={wireframe} />;
+    default:       return <CaskLayer2 layer={layer} index={index} total={total} wireframe={wireframe} />;
+  }
+}
+function CaskModel2({ layers, wireframe, autoRotate }) {
+  const ref = useRef();
+  useFrame(() => { if (autoRotate && ref.current) ref.current.rotation.y += 0.004; });
+  const sorted = [...layers].sort((a, b) => b.r - a.r);
+  return (
+    <group ref={ref}>
+      {sorted.map((l, i) => <ShapeLayer2 key={i} layer={l} index={i} total={sorted.length} wireframe={wireframe} />)}
+      <axesHelper args={[Math.max(...sorted.map(l => l.r), 1) * 1.6]} />
+    </group>
+  );
+}
+function CaskScene({ layers, wireframe, autoRotate }) {
+  const camDist = layers.length ? Math.max(...layers.map(l => Math.max(l.r, l.h/2))) * 3.5 : 6;
+  return (
+    <Canvas camera={{ position: [camDist*0.6, camDist*0.5, camDist], fov: 45 }} style={{ background: 'transparent' }} gl={{ antialias: true }}>
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[10, 20, 10]} intensity={1.4} />
+      <directionalLight position={[-8, 5, -5]} intensity={0.5} color="#a0c0ff" />
+      {layers.length ? <CaskModel2 layers={layers} wireframe={wireframe} autoRotate={autoRotate} /> : null}
+      <OrbitControls enablePan={false} />
+      <gridHelper args={[camDist*2, 10, '#1a2040', '#1a2040']} />
+    </Canvas>
+  );
+}
+
 export default function Tab2() {
   const { uploadedCode, uploadedFileName, parseResult, setUploadedFile, setParseResult, clearUpload } = useMCNPStore();
   const [drag, setDrag] = useState(false);
@@ -123,6 +186,11 @@ export default function Tab2() {
   const [rendered, setRendered] = useState(false);
   const [wireframe2, setWireframe2] = useState(false);
   const [autoRotate2, setAutoRotate2] = useState(true);
+  const [parsedLayers, setParsedLayers] = useState([]);
+  
+  // 💡 중복된 chatHistory2 선언을 하나로 정리했습니다.
+  const [chatHistory2, setChatHistory2] = useState([]);
+  
   const fileRef = useRef();
 
   const handleFile = (f) => {
@@ -144,9 +212,13 @@ export default function Tab2() {
     if (!uploadedCode) return;
     const result = parseMCNP(uploadedCode);
     setParseResult(result);
+    // 파싱된 셀/서페이스로 3D 레이어 추출
+    const layers = buildCaskLayers(result.parsedCells || [], result.parsedSurfs || [], []);
+    setParsedLayers(layers);
     addMsg(
       `분석 완료: Cell ${result.cells}개 · Surface ${result.surfs}개 · Material ${result.mats}개 · NPS ${result.nps} · MODE ${result.mode || 'N'}. ` +
       (result.errors.length ? `⚠️ ${result.errors.length}개 오류 감지.` : '✅ 주요 오류 없음.') +
+      (layers.length ? ` 3D 렌더링 가능 레이어 ${layers.length}개 추출.` : '') +
       '\n이 설계에 대해 질문해 주세요.',
       false
     );
@@ -156,8 +228,6 @@ export default function Tab2() {
     const msgId = id || Date.now();
     setMsgs(m => [...m, { id: msgId, user, text, loading }]);
   };
-
-  const [chatHistory2, setChatHistory2] = useState([]);
 
   const send = () => {
     const t = input.trim(); if (!t) return;
@@ -335,25 +405,31 @@ export default function Tab2() {
           </div>
         </ColHeader>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden', padding: 9 }}>
-          <div style={{ height: 200, flexShrink: 0, borderRadius: 5, overflow: 'hidden', border: `1px solid ${theme.bd}`, background: rendered ? 'radial-gradient(ellipse at 50% 40%, #0c1422, #090c12)' : theme.bg }}>
+          {/* 3D Viewer */}
+          <div style={{ height: 200, flexShrink: 0, borderRadius: 5, overflow: 'hidden', border: `1px solid ${theme.bd}`, background: rendered ? 'radial-gradient(ellipse at 50% 40%, #0c1422, #090c12)' : theme.bg, position: 'relative' }}>
             {rendered ? (
-              <Canvas camera={{ position: [0, 3, 8], fov: 45 }} style={{ background: 'transparent' }} gl={{ antialias: true }}>
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[10, 20, 10]} intensity={1.4} />
-                <directionalLight position={[-8, 5, -5]} intensity={0.5} color="#a0c0ff" />
-                {[
-                  { r: 2.0, color: theme.ac },
-                  { r: 1.5, color: theme.tl },
-                  { r: 0.8, color: theme.am },
-                ].map((l, i) => (
-                  <mesh key={i}>
-                    <cylinderGeometry args={[l.r, l.r, 5, 64, 1, true]} />
-                    <meshStandardMaterial color={l.color} transparent opacity={wireframe2 ? 0.08 : 0.35} side={2} wireframe={wireframe2} />
-                  </mesh>
-                ))}
-                <OrbitControls autoRotate={autoRotate2} autoRotateSpeed={2} />
-                <gridHelper args={[10, 10, '#1a2040', '#1a2040']} />
-              </Canvas>
+              <>
+                <CaskScene layers={parsedLayers} wireframe={wireframe2} autoRotate={autoRotate2} />
+                {/* 범례 */}
+                {parsedLayers.length > 0 && (
+                  <div style={{ position: 'absolute', bottom: 6, left: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {parsedLayers.map((l, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, color: theme.tx2 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: 2, background: l.color, border: `1px solid ${l.color}`, flexShrink: 0 }} />
+                        <span style={{ color: l.color }}>셀{i+1}</span>
+                        {l.rawR && <span style={{ color: theme.tx3 }}>r={l.rawR}cm</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {parsedLayers.length === 0 && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ fontSize: 9, color: theme.tx3, textAlign: 'center' }}>
+                      AI 해석을 먼저 실행하면<br />파일 기반으로 렌더링됩니다
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 22, opacity: 0.4 }}>⬡</div>

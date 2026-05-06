@@ -3,6 +3,8 @@ import { RowItem, RowHeader, NumBadge, Row, Label, Info, Btn, Select, Input } fr
 import { useMCNPStore } from '@/store/mcnpStore';
 import { theme } from '@/theme';
 import { CELL_TYPES } from '@/utils/constants';
+import { CARD_TOOLTIPS, CELL_TYPE_TOOLTIPS } from '@/utils/tooltips';
+import Tooltip from '@/components/Tooltip';
 
 function CellFields({ cell }) {
   const { updateCell, materials } = useMCNPStore();
@@ -82,7 +84,7 @@ export default function CellCard({ onDetail }) {
   const { cells, addCell, removeCell, changeCellType } = useMCNPStore();
 
   return (
-    <CollapsibleCard badge="CELL" title="Cell Card" count={cells.length} onDetail={onDetail}>
+    <CollapsibleCard badge="CELL" title="Cell Card" count={cells.length} onDetail={onDetail} tooltip={CARD_TOOLTIPS.CELL}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {cells.map(c => (
           <RowItem key={c.id}>
@@ -95,6 +97,12 @@ export default function CellCard({ onDetail }) {
               >
                 {CELL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </Select>
+              <Tooltip
+                title={CELL_TYPE_TOOLTIPS[c.type]?.title}
+                desc={CELL_TYPE_TOOLTIPS[c.type]?.desc}
+                code={CELL_TYPE_TOOLTIPS[c.type]?.code}
+                badge="CELL"
+              />
               <Btn $variant="del" onClick={() => removeCell(c.id)}>✕</Btn>
             </RowHeader>
             <CellFields cell={c} />
