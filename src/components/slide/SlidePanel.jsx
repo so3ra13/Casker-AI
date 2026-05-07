@@ -5,6 +5,8 @@ import LatticeEditor from './LatticeEditor';
 import TallyEditor from './TallyEditor';
 import CollapsibleCard from '@/components/CollapsibleCard';
 import { Row, Label, Input, Btn } from '@/theme';
+import { SLIDE_TOOLTIPS } from '@/utils/tooltips';
+import Tooltip from '@/components/Tooltip';
 
 const Panel = styled.div`
   position: fixed;
@@ -19,7 +21,7 @@ const Panel = styled.div`
   transform: translateX(${p => p.$open ? '0' : '100%'});
   transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
   z-index: 25;
-  overflow: hidden;
+  overflow: visible;
 `;
 
 const PanelHd = styled.div`
@@ -48,6 +50,7 @@ const CloseBtn = styled.button`
 const PanelScroll = styled.div`
   flex: 1;
   overflow-y: auto;
+  overflow-x: visible;
   padding: 9px;
   display: flex;
   flex-direction: column;
@@ -62,7 +65,7 @@ const TITLES = {
 
 function SurfDetail() {
   return (
-    <CollapsibleCard badge="SURF" title="좌표 변환 (TR / TRCL)">
+    <CollapsibleCard badge="SURF" title="좌표 변환 (TR / TRCL)" tooltip={SLIDE_TOOLTIPS.TR}>
       <div style={{ fontSize: 9, color: theme.tx3, padding: '3px 6px', background: theme.bg3, borderLeft: `2px solid ${theme.bd2}`, borderRadius: '0 3px 3px 0' }}>
         TR: 표면 변환 / TRCL: 셀 전체 이동·회전
       </div>
@@ -76,7 +79,10 @@ function SurfDetail() {
         ))}
       </Row>
       <div>
-        <div style={{ fontSize: 8, color: theme.tx3, marginBottom: 4, letterSpacing: '0.8px', fontWeight: 700 }}>회전 행렬</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 8, color: theme.tx3, marginBottom: 4, letterSpacing: '0.8px', fontWeight: 700 }}>
+          회전 행렬
+          <Tooltip title={SLIDE_TOOLTIPS.TRCL_ROTATE.title} desc={SLIDE_TOOLTIPS.TRCL_ROTATE.desc} code={SLIDE_TOOLTIPS.TRCL_ROTATE.code} />
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
           {["xx′","yx′","zx′","xy′","yy′","zy′","xz′","yz′","zz′"].map(p => (
             <Input key={p} style={{ width: '100%' }} placeholder={p} />
