@@ -3,6 +3,8 @@ import styled from 'styled-components';
 import { theme, Row, Label, Input, Btn, Info } from '@/theme';
 import { useMCNPStore } from '@/store/mcnpStore';
 import { UCLS } from '@/utils/constants';
+import { SLIDE_TOOLTIPS } from '@/utils/tooltips';
+import Tooltip from '@/components/Tooltip';
 
 const GridWrap = styled.div`
   display: inline-grid;
@@ -61,6 +63,13 @@ export default function LatticeEditor() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+      {/* 설명 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', background: theme.bg3, borderLeft: `2px solid ${theme.ac}`, borderRadius: '0 4px 4px 0' }}>
+        <span style={{ fontSize: 9, color: theme.tx2, flex: 1 }}>격자 크기 설정 후 팔레트를 선택해 셀을 페인팅하세요.</span>
+        <Tooltip title={SLIDE_TOOLTIPS.LATTICE.title} desc={SLIDE_TOOLTIPS.LATTICE.desc} code={SLIDE_TOOLTIPS.LATTICE.code} badge="LAT" />
+      </div>
+
       <Row>
         <Label>크기</Label>
         <Input $w="36px" type="number" min="1" max="20" value={latNx}
@@ -79,6 +88,7 @@ export default function LatticeEditor() {
           </PalChip>
         ))}
         <PalChip $ucls="u0" $selected={paintU === 0} onClick={() => setPaintU(0)}>void(0)</PalChip>
+        <Tooltip title={SLIDE_TOOLTIPS.UNIVERSE.title} desc={SLIDE_TOOLTIPS.UNIVERSE.desc} code={SLIDE_TOOLTIPS.UNIVERSE.code} />
       </Row>
 
       {/* Grid */}
@@ -96,7 +106,12 @@ export default function LatticeEditor() {
 
       {/* Fill preview */}
       <FillPrev>
-        {`fill=${latFillRange}\n     ` + latFillVals.split('\n').join('\n          ')}
+        {(() => {
+          const header = `fill=${latFillRange}`;
+          const indent = ' '.repeat(5); // "fill=" 길이 맞춤
+          const rows = latFillVals.split('\n');
+          return header + '\n' + rows.map(r => indent + r.trim()).join('\n');
+        })()}
       </FillPrev>
 
       <Btn $variant="ghost" style={{ fontSize: 9 }} onClick={() => initLatGrid(latNx, latNy)}>

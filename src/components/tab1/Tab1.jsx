@@ -9,6 +9,7 @@ import ViewerChat from './ViewerChat';
 import SlidePanel from '@/components/slide/SlidePanel';
 import { useMCNPStore } from '@/store/mcnpStore';
 import { Input } from '@/theme';
+import { CARD_TOOLTIPS } from '@/utils/tooltips';
 
 const Grid = styled.div`
   display: grid;
@@ -36,14 +37,10 @@ export default function Tab1() {
         <Col>
           <ColHeader>
             <ColTitle>카드 입력</ColTitle>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <Btn $variant="ghost" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => useMCNPStore.getState().setAppMode('shield')}>차폐</Btn>
-              <Btn $variant="ghost" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => useMCNPStore.getState().setAppMode('crit')}>임계</Btn>
-            </div>
           </ColHeader>
           <ColScroll>
             {/* TITLE */}
-            <CollapsibleCard badge="TITLE" title="문제 제목">
+            <CollapsibleCard badge="TITLE" title="문제 제목" tooltip={CARD_TOOLTIPS.TITLE}>
               <Input $w="100%" style={{ width: '100%' }} value={title} onChange={e => setTitle(e.target.value)} placeholder="MCNP Shielding Problem" />
             </CollapsibleCard>
 
