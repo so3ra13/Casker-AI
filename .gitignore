@@ -1,0 +1,10 @@
+# .gitignore
+node_modules/
+.env
+dist/
+CLAUDE.md
+shielding-backend/venv/
+shielding-backend/chroma_db/
+casker-backend/.env
+casker-backend/venv/
+casker-backend/chroma_db/

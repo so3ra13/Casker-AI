@@ -159,6 +159,21 @@ export const useMCNPStore = create((set, get) => ({
   openSlide: (key) => set({ slideOpen: true, slideKey: key }),
   closeSlide: () => set({ slideOpen: false, slideKey: null }),
 
+  // ── Bulk import from parsed MCNP code ──
+  bulkLoad: ({ title, cells, surfaces, materials, modes, nps }) => set(() => {
+    surfSeq = surfaces.length ? Math.max(...surfaces.map(s => s.id)) : 0;
+    cellSeq = cells.length;
+    matSeq = materials.length;
+    return {
+      title: title || '',
+      cells,
+      surfaces,
+      materials,
+      modes: modes instanceof Set ? modes : new Set(modes || ['N']),
+      nps: nps || '1000000',
+    };
+  }),
+
   // ── Tab2 ──
   uploadedCode: '',
   uploadedFileName: '',
