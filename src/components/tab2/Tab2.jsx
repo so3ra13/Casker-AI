@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { theme, ColHeader, ColTitle, Btn, PulseDot, Info } from '@/theme';
+import { theme, ColHeader, ColTitle, Btn, PulseDot, Info, Select, Input } from '@/theme';
 import { useMCNPStore } from '@/store/mcnpStore';
 import { parseMCNP } from '@/utils/parser';
 import { buildCaskLayers } from '@/utils/buildCaskLayers';
@@ -106,16 +106,173 @@ const ChatWrap = styled.div`
 `;
 const ChatMsgs = styled.div`flex:1;overflow-y:auto;padding:7px 9px;display:flex;flex-direction:column;gap:6px;`;
 const Msg = styled.div`
-  max-width:90%;padding:5px 8px;border-radius:6px;font-size:10px;line-height:1.5;
-  align-self:${p=>p.$user?'flex-end':'flex-start'};
-  background:${p=>p.$user?theme.ac2:theme.bg3};
-  color:${p=>p.$user?'#fff':theme.tx};
-  border:${p=>p.$user?'none':`1px solid ${theme.bd}`};
-  border-radius:${p=>p.$user?'6px 6px 2px 6px':'6px 6px 6px 2px'};
+  max-width: 92%;
+  padding: 6px 9px;
+  font-size: 10px;
+  line-height: 1.6;
+  align-self: ${p => p.$user ? 'flex-end' : 'flex-start'};
+  background: ${p => p.$user ? theme.ac2 : theme.bg3};
+  color: ${p => p.$user ? '#fff' : theme.tx};
+  border: ${p => p.$user ? 'none' : `1px solid ${theme.bd}`};
+  border-radius: ${p => p.$user ? '6px 6px 2px 6px' : '6px 6px 6px 2px'};
+  white-space: pre-wrap;
+  word-break: break-word;
+
+  code {
+    font-family: ${theme.mn};
+    font-size: 9.5px;
+    background: #0d1117;
+    color: #79c0ff;
+    padding: 0 3px;
+    border-radius: 3px;
+  }
+  pre {
+    margin: 5px 0;
+    padding: 8px 10px;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-family: ${theme.mn};
+    font-size: 9.5px;
+    color: #e6edf3;
+    line-height: 1.55;
+    white-space: pre;
+  }
+  strong { color: #79c0ff; font-weight: 700; }
+  ul, ol { margin: 3px 0 3px 14px; padding: 0; }
+  li { margin: 1px 0; }
+  p { margin: 2px 0; }
 `;
 const ChatInputRow = styled.div`padding:6px 9px;border-top:1px solid ${theme.bd};display:flex;gap:4px;flex-shrink:0;`;
 const ChatInput = styled.textarea`flex:1;background:${theme.bg3};border:1px solid ${theme.bd2};border-radius:4px;color:${theme.tx};font-size:10px;padding:5px 8px;outline:none;resize:none;font-family:${theme.sf};&:focus{border-color:${theme.ac};}`;
 const SendBtn = styled.button`width:28px;height:28px;background:${theme.ac};border:none;border-radius:4px;cursor:pointer;color:#fff;font-size:12px;&:hover{background:${theme.ac2};}`;
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+const ModalBox = styled.div`
+  background: ${theme.bg2};
+  border: 1px solid ${theme.bd};
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+  width: 62%;
+  height: 58%;
+  min-width: 340px;
+  min-height: 260px;
+  max-width: 860px;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  resize: both;
+`;
+const ModalHd = styled.div`
+  height: 36px;
+  padding: 0 12px;
+  background: ${theme.bg3};
+  border-bottom: 1px solid ${theme.bd};
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+`;
+const ModalBody = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: ${theme.tx};
+`;
+const ExpandBtn = styled.button`
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid ${theme.bd2};
+  border-radius: 4px;
+  color: ${theme.tx3};
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover { background: ${theme.bg4}; color: ${theme.tx}; border-color: ${theme.bd}; }
+`;
+
+function MsgContent({ text }) {
+  const parts = [];
+  const codeBlockRe = /```(?:\w+)?\n?([\s\S]*?)```/g;
+  let last = 0, m;
+  while ((m = codeBlockRe.exec(text)) !== null) {
+    if (m.index > last) parts.push({ type: 'text', content: text.slice(last, m.index) });
+    parts.push({ type: 'code', content: m[1].trimEnd() });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ type: 'text', content: text.slice(last) });
+
+  // 수식처럼 보이는 줄 감지 (= 포함 + 수식 기호)
+  const isFormula = line =>
+    /[=×÷·μρ]/.test(line) && /\d/.test(line) && !line.trimStart().startsWith('#');
+
+  function renderSegments(line) {
+    return line.split(/(\*\*[^*]+\*\*)/).map((seg, j) =>
+      seg.startsWith('**') && seg.endsWith('**')
+        ? <strong key={j}>{seg.slice(2, -2)}</strong>
+        : seg
+    );
+  }
+
+  function renderText(raw) {
+    return raw.split('\n').map((line, i) => {
+      const trimmed = line.trimStart();
+      const isBullet  = trimmed.startsWith('- ') || trimmed.startsWith('• ');
+      const isHeading = trimmed.startsWith('## ') || trimmed.startsWith('# ');
+      const formula   = isFormula(line);
+
+      if (isHeading) {
+        const txt = trimmed.replace(/^#+\s*/, '');
+        return <div key={i} style={{ fontWeight: 700, color: '#79c0ff', marginTop: 6, marginBottom: 2 }}>{txt}</div>;
+      }
+      if (isBullet) {
+        return (
+          <div key={i} style={{ paddingLeft: 10, textIndent: -10, marginLeft: 10 }}>
+            {'• '}{renderSegments(trimmed.replace(/^[-•]\s*/, ''))}
+          </div>
+        );
+      }
+      if (formula) {
+        return (
+          <div key={i} style={{
+            fontFamily: 'monospace', fontSize: 9.5,
+            background: 'rgba(121,192,255,0.07)', borderLeft: '2px solid #304060',
+            padding: '1px 8px', margin: '2px 0', letterSpacing: '0.3px',
+          }}>
+            {renderSegments(line)}
+          </div>
+        );
+      }
+      return <div key={i}>{renderSegments(line)}</div>;
+    });
+  }
+
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.type === 'code'
+          ? <pre key={i}>{p.content}</pre>
+          : <span key={i}>{renderText(p.content)}</span>
+      )}
+    </>
+  );
+}
 
 // ── Tab2 전용 3D 씬 ──────────────────────────────────────
 function CaskLayer2({ layer, index, total, wireframe }) {
@@ -178,18 +335,30 @@ function CaskScene({ layers, wireframe, autoRotate }) {
   );
 }
 
+const SOURCE_E = { co60: 1.25, cs137: 0.662, ir192: 0.380, am241: 0.060 };
+
 export default function Tab2() {
   const { uploadedCode, uploadedFileName, parseResult, setUploadedFile, setParseResult, clearUpload } = useMCNPStore();
   const [drag, setDrag] = useState(false);
   const [msgs, setMsgs] = useState([{ id: 0, user: false, text: '파일을 업로드하고 AI 해석을 실행하면 해당 설계에 대한 맞춤 조언을 드릴 수 있습니다.' }]);
   const [input, setInput] = useState('');
+  const [expandedMsg, setExpandedMsg] = useState(null);
   const [rendered, setRendered] = useState(false);
   const [wireframe2, setWireframe2] = useState(false);
   const [autoRotate2, setAutoRotate2] = useState(true);
   const [parsedLayers, setParsedLayers] = useState([]);
   
-  // 💡 중복된 chatHistory2 선언을 하나로 정리했습니다.
   const [chatHistory2, setChatHistory2] = useState([]);
+
+  // ── 차폐 두께 계산기 상태 ──
+  const [optMat,        setOptMat]        = useState('lead');
+  const [optSource,     setOptSource]     = useState('cs137');
+  const [optCustomE,    setOptCustomE]    = useState('1.0');
+  const [optTrans,      setOptTrans]      = useState('0.1');
+  const [optCustomT,    setOptCustomT]    = useState('0.05');
+  const [optBuildup,    setOptBuildup]    = useState(true);
+  const [optResult,     setOptResult]     = useState(null);
+  const [optLoading,    setOptLoading]    = useState(false);
   
   const fileRef = useRef();
 
@@ -224,6 +393,27 @@ export default function Tab2() {
     );
   };
 
+  const calcThickness = async () => {
+    const energy   = optSource === 'custom' ? parseFloat(optCustomE)  : SOURCE_E[optSource];
+    const doseRed  = optTrans  === 'custom' ? parseFloat(optCustomT)  : parseFloat(optTrans);
+    if (!energy || isNaN(doseRed) || doseRed <= 0 || doseRed >= 1) return;
+    setOptLoading(true);
+    setOptResult(null);
+    try {
+      const res = await fetch('http://localhost:8000/optimize/thickness', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ material: optMat, dose_reduction: doseRed, energy_MeV: energy, use_buildup: optBuildup }),
+      });
+      const data = await res.json();
+      setOptResult(res.ok ? data : { error: data.detail || '오류' });
+    } catch {
+      setOptResult({ error: '서버 연결 실패 (localhost:8000)' });
+    } finally {
+      setOptLoading(false);
+    }
+  };
+
   const addMsg = (text, user, id, loading = false) => {
     const msgId = id || Date.now();
     setMsgs(m => [...m, { id: msgId, user, text, loading }]);
@@ -231,8 +421,9 @@ export default function Tab2() {
 
   const send = () => {
     const t = input.trim(); if (!t) return;
-    addMsg(t, true); setInput('');
-    const loadingId = Date.now();
+    const userMsgId = Date.now();
+    const loadingId = userMsgId + 1;
+    addMsg(t, true, userMsgId); setInput('');
     addMsg('🔬 설계 분석 중...', false, loadingId, true);
 
     const ctx = parseResult || {};
@@ -251,6 +442,7 @@ export default function Tab2() {
           errors:     ctx.errors?.map(e => e.msg) || [],
           warns:      ctx.warns?.map(w => w.msg)  || [],
           summary:    ctx.summary || '',
+          code:       uploadedCode ? uploadedCode.slice(0, 3000) : '',
         },
       }),
     })
@@ -277,6 +469,7 @@ export default function Tab2() {
   const codeLines = uploadedCode ? uploadedCode.split('\n') : [];
 
   return (
+    <>
     <Grid>
       {/* COL A: 업로드 + 해석 */}
       <Col>
@@ -353,6 +546,92 @@ export default function Tab2() {
               </div>
             </CollapsibleCard>
           )}
+
+          {/* ── 차폐 두께 계산기 ── */}
+          <CollapsibleCard badge="OPT" title="차폐 두께 계산기" defaultOpen={true}>
+            {/* 선원 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: theme.tx3, width: 30, flexShrink: 0 }}>선원</span>
+              <Select $w="100%" value={optSource} onChange={e => setOptSource(e.target.value)} style={{ flex: 1 }}>
+                <option value="co60">Co-60 (1.25 MeV)</option>
+                <option value="cs137">Cs-137 (0.662 MeV)</option>
+                <option value="ir192">Ir-192 (0.380 MeV)</option>
+                <option value="am241">Am-241 (0.060 MeV)</option>
+                <option value="custom">직접입력</option>
+              </Select>
+              {optSource === 'custom' && (
+                <Input $w="56px" value={optCustomE} onChange={e => setOptCustomE(e.target.value)} placeholder="MeV" />
+              )}
+            </div>
+
+            {/* 재질 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: theme.tx3, width: 30, flexShrink: 0 }}>재질</span>
+              <Select $w="100%" value={optMat} onChange={e => setOptMat(e.target.value)} style={{ flex: 1 }}>
+                <option value="lead">납 (Pb)</option>
+                <option value="concrete">콘크리트</option>
+                <option value="water">물 (H₂O)</option>
+                <option value="iron">철 (Fe)</option>
+                <option value="hdpe">HDPE</option>
+                <option value="b4c">탄화붕소 (B₄C)</option>
+                <option value="boral">Boral</option>
+              </Select>
+            </div>
+
+            {/* 목표 투과율 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: theme.tx3, width: 30, flexShrink: 0 }}>투과율</span>
+              <Select $w="100%" value={optTrans} onChange={e => setOptTrans(e.target.value)} style={{ flex: 1 }}>
+                <option value="0.5">50% — 2배 감쇠</option>
+                <option value="0.1">10% — 10배 감쇠</option>
+                <option value="0.01">1% — 100배 감쇠</option>
+                <option value="0.001">0.1% — 1000배 감쇠</option>
+                <option value="custom">직접입력</option>
+              </Select>
+              {optTrans === 'custom' && (
+                <Input $w="56px" value={optCustomT} onChange={e => setOptCustomT(e.target.value)} placeholder="0~1" />
+              )}
+            </div>
+
+            {/* 빌드업 토글 */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 9, color: theme.tx2 }}>
+              <input type="checkbox" checked={optBuildup} onChange={e => setOptBuildup(e.target.checked)}
+                style={{ accentColor: theme.ac, width: 12, height: 12 }} />
+              Buildup Factor 적용 (Berger 근사)
+            </label>
+
+            <Btn $variant="primary" onClick={calcThickness} disabled={optLoading}
+              style={{ width: '100%', marginTop: 2 }}>
+              {optLoading ? '계산 중...' : '두께 계산'}
+            </Btn>
+
+            {/* 결과 */}
+            {optResult && !optResult.error && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+                  {[
+                    { label: '필요 두께',  val: `${optResult.thickness_cm} cm`, color: theme.gn },
+                    { label: '감쇠 계수',  val: `${optResult.attenuation_factor}×`,   color: theme.ac },
+                    { label: 'HVL (반가층)', val: `${optResult.hvl_cm} cm`,      color: theme.tl },
+                    { label: 'TVL (십가층)', val: `${optResult.tvl_cm} cm`,      color: theme.pu },
+                  ].map(s => (
+                    <div key={s.label} style={{ background: theme.bg4, border: `1px solid ${theme.bd}`, borderRadius: 5, padding: '6px 8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: theme.mn, color: s.color }}>{s.val}</div>
+                      <div style={{ fontSize: 8, color: theme.tx3, marginTop: 2 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 9, color: theme.tx3, padding: '4px 6px', borderLeft: `2px solid ${theme.bd2}` }}>
+                  {optResult.mat_name} · μ = {optResult['mu_linear_cm-1']} cm⁻¹ · {optResult.used_buildup ? 'Buildup 포함' : 'Buildup 미적용'}
+                </div>
+              </>
+            )}
+            {optResult?.error && (
+              <div style={{ fontSize: 9, color: theme.rd, padding: '4px 6px', borderLeft: `2px solid ${theme.rd}` }}>
+                {optResult.error}
+              </div>
+            )}
+          </CollapsibleCard>
         </ColScroll>
       </Col>
 
@@ -442,9 +721,18 @@ export default function Tab2() {
           <ChatWrap>
             <div style={{ height: 36, padding: '0 9px', background: theme.bg3, borderBottom: `1px solid ${theme.bd}`, fontSize: 9, fontWeight: 700, color: theme.tx2, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
               <PulseDot />설계 조언 AI (파일 컨텍스트 인식)
+              {/* 버튼 추가 */}
+              <ExpandBtn
+                title="채팅 전체 보기"
+                onClick={() => setExpandedMsg(msgs.filter(m => !m.loading))}
+              >⤢</ExpandBtn>
             </div>
             <ChatMsgs>
-              {msgs.map(m => <Msg key={m.id} $user={m.user}>{m.text}</Msg>)}
+              {msgs.map(m => (
+                <Msg key={m.id} $user={m.user}>
+                  {m.user ? m.text : <MsgContent text={m.text} />}
+                </Msg>
+              ))}
             </ChatMsgs>
             <ChatInputRow>
               <ChatInput rows={1} value={input} onChange={e => setInput(e.target.value)}
@@ -456,5 +744,38 @@ export default function Tab2() {
         </div>
       </Col>
     </Grid>
+
+    {/* 모달: Grid 바깥, Fragment 안쪽 */}
+      {expandedMsg && (
+        <ModalOverlay onClick={() => setExpandedMsg(null)}>
+          <ModalBox onClick={e => e.stopPropagation()}>
+            <ModalHd>
+              <PulseDot />
+              <span style={{ fontSize: 9, fontWeight: 700, color: theme.tx2 }}>채팅 전체 보기</span>
+              <button onClick={() => setExpandedMsg(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: theme.tx3, cursor: 'pointer' }}>✕</button>
+            </ModalHd>
+            <ModalBody>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {expandedMsg.map(m => (
+                  <div key={m.id} style={{
+                    alignSelf: m.user ? 'flex-end' : 'flex-start',
+                    maxWidth: '88%',
+                    padding: '7px 11px',
+                    borderRadius: m.user ? '8px 8px 2px 8px' : '8px 8px 8px 2px',
+                    background: m.user ? theme.ac2 : theme.bg4,
+                    border: m.user ? 'none' : `1px solid ${theme.bd}`,
+                    color: m.user ? '#fff' : theme.tx,
+                    fontSize: 11,
+                    lineHeight: 1.65,
+                  }}>
+                    {m.user ? m.text : <MsgContent text={m.text} />}
+                  </div>
+                ))}
+              </div>
+            </ModalBody>
+          </ModalBox>
+        </ModalOverlay>
+      )}
+    </> 
   );
 }

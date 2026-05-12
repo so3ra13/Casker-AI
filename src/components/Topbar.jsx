@@ -66,8 +66,8 @@ export default function Topbar() {
   return (
     <Bar>
       <Logo>
-        <LogoIcon>SA</LogoIcon>
-        ShieldingAI
+        <LogoIcon>CA</LogoIcon>
+        Casker AI
       </Logo>
       <div style={{ display: 'flex', gap: 2, marginLeft: 10 }}>
         <TabBtn $active={activeTab === 1} onClick={() => setActiveTab(1)}>Design &amp; View</TabBtn>

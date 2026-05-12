@@ -12,22 +12,22 @@ export function parseMCNP(code) {
 
   // 연속행 처리 (& 또는 5열 들여쓰기)
   const joined = [];
-  let buf = '';
+  let buf = null;
   lines.slice(1).forEach(raw => {
     const l = raw.trimEnd();
-    if (/^\s{5,}/.test(l) && buf) {
+    if (/^\s{5,}/.test(l) && buf !== null && buf !== '') {
       buf += ' ' + l.trim();
     } else {
-      if (buf) joined.push(buf);
+      if (buf !== null) joined.push(buf);
       buf = l;
     }
   });
-  if (buf) joined.push(buf);
+  if (buf !== null) joined.push(buf);
 
   joined.forEach((raw, i) => {
     const l = raw.trim();
     const ln = i + 2;
-    if ((l === '' || l === 'c') && section < 2) { section++; return; }
+    if (l === '' && section < 2) { section++; return; }
     if (l.startsWith('c ') || l === 'c') return;
 
     // ── Cell Card ──
@@ -45,7 +45,8 @@ export function parseMCNP(code) {
         surfExprParts.push(parts[ki]);
       }
       const surfExpr = surfExprParts.join(' ');
-      const isBoundary = parts.slice(ki).some(p => /imp:n=0/i.test(p)) || matId === 0;
+      const impPart = parts.slice(ki).find(p => /^imp:/i.test(p));
+      const isBoundary = impPart ? /=\s*0/.test(impPart) : matId === 0;
       if (!isNaN(d = parseFloat(dens)) || true) {
         parsedCells.push({
           id: cellId,

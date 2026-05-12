@@ -28,23 +28,33 @@ export function getSurfLines(surfaces) {
   });
 }
 
+// 양수 표면번호 앞에 공백 추가: '-18'과 '18'의 숫자 자릿수를 같은 열에 정렬
+function normSurf(surf) {
+  // 토큰 시작(행 처음 또는 공백 직후)에 숫자가 오면 앞에 공백 삽입
+  return surf.replace(/(^|\s)(\d)/g, (_, pre, d) => (pre || '') + ' ' + d);
+}
+
 // ── Cell Lines ─────────────────────────────────────────────
-export function getCellLines(cells, latFillRange, latFillVals) {
+export function getCellLines(cells, latFillRange, latFillVals, modes = new Set(['N'])) {
   if (!cells.length) return [];
+  // IMP 입자 문자열: 'P,N', 'N', 'P,N,E' 등 (MCNP 표준 순서 P→N→E)
+  const impPars = ['P', 'N', 'E'].filter(p => modes.has(p)).join(',') || 'N';
+
   const GAP = 3;
   const cW = Math.max(...cells.map(c => String(c.id).length)) + GAP;
   const mW = Math.max(...cells.map(c => c.type === 'boundary' ? 1 : String(c.mat || '0').length)) + GAP;
   const dW = Math.max(...cells.map(c => c.type === 'boundary' ? 0 : String(c.dens || '').length)) + GAP;
-  const sW = Math.max(...cells.map(c => String(c.surf || '').length)) + GAP;
+  // sW는 normSurf 적용 후 길이 기준으로 계산
+  const sW = Math.max(...cells.map(c => normSurf(c.surf || '').length)) + GAP;
   const contIndent = ' '.repeat(cW + mW + dW);
 
   const lines = [];
   cells.forEach(c => {
     const cStr = String(c.id).padEnd(cW);
-    const sStr = (c.surf || '').padEnd(sW);
+    const sStr = normSurf(c.surf || '').padEnd(sW);  // 좌정렬: 첫 숫자 열 맞춤
 
     if (c.type === 'boundary') {
-      lines.push(cStr + '0'.padEnd(mW) + ' '.repeat(dW) + sStr + 'imp:n=0 $ Boundary');
+      lines.push(cStr + '0'.padEnd(mW) + ' '.repeat(dW) + sStr + `IMP:${impPars}=0 $ Boundary`);
       return;
     }
     const mStr = String(c.mat || '0').padEnd(mW);
@@ -53,18 +63,18 @@ export function getCellLines(cells, latFillRange, latFillVals) {
     if (c.type === 'lat') {
       const frange = latFillRange || '0:3 0:3 0:0';
       const fvals  = latFillVals  || '';
-      let line = cStr + mStr + dStr + sStr + `lat=${c.latType || '1'}  u=${c.u || '2'}  imp:n=1`;
+      let line = cStr + mStr + dStr + sStr + `lat=${c.latType || '1'}  u=${c.u || '2'}  IMP:${impPars}=1`;
       line += `\n${contIndent}fill=${frange}`;
       fvals.trim().split('\n').forEach(v => { line += `\n${contIndent}     ${v}`; });
       lines.push(line);
       return;
     }
     if (c.type === 'fill') {
-      lines.push(cStr + mStr + dStr + sStr + `fill=${c.fillExpr || '2'}  imp:n=1`);
+      lines.push(cStr + mStr + dStr + sStr + `fill=${c.fillExpr || '2'}  IMP:${impPars}=1`);
       return;
     }
     const uPart = c.u && c.u !== '0' ? `u=${c.u}  ` : '';
-    lines.push(cStr + mStr + dStr + sStr + uPart + 'imp:n=1');
+    lines.push(cStr + mStr + dStr + sStr + uPart + `IMP:${impPars}=1`);
   });
   return lines;
 }
@@ -191,7 +201,7 @@ export function generateMCNP(state) {
   L.push('c');
 
   L.push('c ==== CELL CARD ====');
-  getCellLines(cells, latFillRange, latFillVals).forEach(l => L.push(l));
+  getCellLines(cells, latFillRange, latFillVals, modes).forEach(l => L.push(l));
   L.push('c');
 
   L.push('c ==== SURFACE CARD ====');
@@ -199,10 +209,7 @@ export function generateMCNP(state) {
   L.push('c');
 
   L.push('c ==== DATA CARD ====');
-  const impN = getImpLine('N', cells, impOverrides);
-  if (impN) L.push(impN);
-  if (modes.has('P')) { const impP = getImpLine('P', cells, impOverrides); if (impP) L.push(impP); }
-  if (modes.has('E')) { const impE = getImpLine('E', cells, impOverrides); if (impE) L.push(impE); }
+  // IMP는 셀 카드 inline으로 출력하므로 별도 데이터카드 불필요
 
   const matLines = getMatLines(materials);
   if (matLines.length) { L.push('c --- Materials ---'); matLines.forEach(l => L.push(l)); }
@@ -237,7 +244,7 @@ export function highlightLine(l) {
   if (/^F[0-9]/.test(t)) return 'tally';
   if (/^\d/.test(t)) {
     if (t.includes('lat=') || t.includes('fill=')) return 'lat';
-    if (t.includes('imp:n=0')) return 'boundary';
+    if (/imp:.*=0/i.test(t)) return 'boundary';
     if (t.includes('u=')) return 'universe';
     return 'cell';
   }
